@@ -11,17 +11,28 @@ const __dirname = path.dirname(__filename);
 
 const appId = Number(process.env.GITHUB_APP_ID);
 const installationId = Number(process.env.GITHUB_INSTALLATION_ID);
-const privateKeyPath = path.resolve(__dirname, "..", process.env.GITHUB_PRIVATE_KEY_PATH);
+const privateKeyFromEnv = process.env.GITHUB_PRIVATE_KEY;
+const privateKeyPath = process.env.GITHUB_PRIVATE_KEY_PATH
+  ? path.resolve(__dirname, "..", process.env.GITHUB_PRIVATE_KEY_PATH)
+  : null;
 
-if (!appId || !installationId || !process.env.GITHUB_PRIVATE_KEY_PATH) {
+if (!appId || !installationId) {
   throw new Error("GitHub App environment variables are missing.");
 }
 
-if (!fs.existsSync(privateKeyPath)) {
-  throw new Error(`GitHub private key not found: ${privateKeyPath}`);
-}
+const privateKey = privateKeyFromEnv
+  ? privateKeyFromEnv.replace(/\\n/g, "\n")
+  : (() => {
+      if (!privateKeyPath) {
+        throw new Error("GitHub private key environment variable is missing.");
+      }
 
-const privateKey = fs.readFileSync(privateKeyPath, "utf8");
+      if (!fs.existsSync(privateKeyPath)) {
+        throw new Error(`GitHub private key not found: ${privateKeyPath}`);
+      }
+
+      return fs.readFileSync(privateKeyPath, "utf8");
+    })();
 
 export const githubApp = new App({
   appId,
@@ -34,14 +45,8 @@ export async function getInstallationOctokit() {
 
 export async function getGitHubProfile(username = "deep-2105") {
   const octokit = await getInstallationOctokit();
-  try {
-    const { data } = await octokit.request("GET /users/{username}", { username });
-    return data;
-  } catch {
-    // Fallback if needed
-    const { data } = await octokit.request("GET /user");
-    return data;
-  }
+  const { data } = await octokit.request("GET /users/{username}", { username });
+  return data;
 }
 
 export async function getUserProfile(username = "deep-2105") {
