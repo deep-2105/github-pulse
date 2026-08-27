@@ -52,11 +52,30 @@ export function RepoInspectorTab({
   // Loading & Error states
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [sectionErrors, setSectionErrors] = useState({
+    details: null,
+    commits: null,
+    pulls: null,
+    issues: null,
+    languages: null,
+    contributors: null,
+    branches: null,
+  });
 
   // Load all repository data
   const loadRepoData = useCallback(async (repoName) => {
     setLoading(true);
     setError(null);
+    setSectionErrors({
+      details: null,
+      commits: null,
+      pulls: null,
+      issues: null,
+      languages: null,
+      contributors: null,
+      branches: null,
+    });
+
     try {
       const [
         detailsRes,
@@ -82,12 +101,59 @@ export function RepoInspectorTab({
         throw new Error(detailsRes.reason?.message || "Failed to load repository details");
       }
 
-      setCommits(commitsRes.status === "fulfilled" && commitsRes.value.success ? commitsRes.value.commits : []);
-      setPulls(pullsRes.status === "fulfilled" && pullsRes.value.success ? pullsRes.value.pullRequests : []);
-      setIssues(issuesRes.status === "fulfilled" && issuesRes.value.success ? issuesRes.value.issues : []);
-      setLanguages(languagesRes.status === "fulfilled" && languagesRes.value.success ? languagesRes.value : null);
-      setContributors(contribsRes.status === "fulfilled" && contribsRes.value.success ? contribsRes.value.contributors : []);
-      setBranches(branchesRes.status === "fulfilled" && branchesRes.value.success ? branchesRes.value.branches : []);
+      const nextSectionErrors = {
+        details: null,
+        commits: null,
+        pulls: null,
+        issues: null,
+        languages: null,
+        contributors: null,
+        branches: null,
+      };
+
+      if (commitsRes.status === "fulfilled" && commitsRes.value.success) {
+        setCommits(commitsRes.value.commits || []);
+      } else {
+        nextSectionErrors.commits = commitsRes.reason?.message || "Could not load commits for this repository.";
+        setCommits([]);
+      }
+
+      if (pullsRes.status === "fulfilled" && pullsRes.value.success) {
+        setPulls(pullsRes.value.pullRequests || []);
+      } else {
+        nextSectionErrors.pulls = pullsRes.reason?.message || "Could not load pull requests for this repository.";
+        setPulls([]);
+      }
+
+      if (issuesRes.status === "fulfilled" && issuesRes.value.success) {
+        setIssues(issuesRes.value.issues || []);
+      } else {
+        nextSectionErrors.issues = issuesRes.reason?.message || "Could not load issues for this repository.";
+        setIssues([]);
+      }
+
+      if (languagesRes.status === "fulfilled" && languagesRes.value.success) {
+        setLanguages(languagesRes.value || null);
+      } else {
+        nextSectionErrors.languages = languagesRes.reason?.message || "Could not load language data for this repository.";
+        setLanguages(null);
+      }
+
+      if (contribsRes.status === "fulfilled" && contribsRes.value.success) {
+        setContributors(contribsRes.value.contributors || []);
+      } else {
+        nextSectionErrors.contributors = contribsRes.reason?.message || "Could not load contributors for this repository.";
+        setContributors([]);
+      }
+
+      if (branchesRes.status === "fulfilled" && branchesRes.value.success) {
+        setBranches(branchesRes.value.branches || []);
+      } else {
+        nextSectionErrors.branches = branchesRes.reason?.message || "Could not load branches for this repository.";
+        setBranches([]);
+      }
+
+      setSectionErrors(nextSectionErrors);
     } catch (err) {
       console.error("Error loading repo details:", err);
       setError(err.message);
@@ -120,6 +186,21 @@ export function RepoInspectorTab({
     if (issueFilter === "closed") return i.state === "closed";
     return true;
   });
+
+  const renderSectionState = ({ icon: Icon, title, message, actionLabel, onAction }) => (
+    <div className="empty-subtab-card" role="status" aria-live="polite">
+      <div className="empty-state-icon">
+        <Icon size={30} />
+      </div>
+      <h4 className="empty-state-title">{title}</h4>
+      <p className="empty-state-text">{message}</p>
+      {onAction && (
+        <button type="button" className="btn-secondary" onClick={onAction}>
+          {actionLabel}
+        </button>
+      )}
+    </div>
+  );
 
   return (
     <div className="tab-pane inspector-pane">
@@ -292,7 +373,15 @@ export function RepoInspectorTab({
             {/* COMMITS SUBTAB */}
             {subTab === "commits" && (
               <div className="commits-view">
-                {commits.length > 0 ? (
+                {sectionErrors.commits ? (
+                  renderSectionState({
+                    icon: GitCommit,
+                    title: "Commits unavailable",
+                    message: sectionErrors.commits,
+                    actionLabel: "Retry",
+                    onAction: () => loadRepoData(currentRepo),
+                  })
+                ) : commits.length > 0 ? (
                   <div className="commits-list">
                     {commits.map((c) => (
                       <div key={c.sha} className="commit-item">
@@ -340,10 +429,11 @@ export function RepoInspectorTab({
                     ))}
                   </div>
                 ) : (
-                  <div className="empty-subtab-card">
-                    <GitCommit size={32} />
-                    <p>No commits recorded on this branch yet.</p>
-                  </div>
+                  renderSectionState({
+                    icon: GitCommit,
+                    title: "No commits yet",
+                    message: "No commits have been recorded on this branch yet.",
+                  })
                 )}
               </div>
             )}
@@ -473,7 +563,15 @@ export function RepoInspectorTab({
                   </button>
                 </div>
 
-                {filteredIssues.length > 0 ? (
+                {sectionErrors.issues ? (
+                  renderSectionState({
+                    icon: AlertCircle,
+                    title: "Issues unavailable",
+                    message: sectionErrors.issues,
+                    actionLabel: "Retry",
+                    onAction: () => loadRepoData(currentRepo),
+                  })
+                ) : filteredIssues.length > 0 ? (
                   <div className="issues-list">
                     {filteredIssues.map((issue) => (
                       <div key={issue.id} className="issue-item">
@@ -533,10 +631,11 @@ export function RepoInspectorTab({
                     ))}
                   </div>
                 ) : (
-                  <div className="empty-subtab-card">
-                    <AlertCircle size={32} />
-                    <p>No issues match the current filter.</p>
-                  </div>
+                  renderSectionState({
+                    icon: AlertCircle,
+                    title: "No issues match the current filter",
+                    message: "There are no issues matching the selected filter for this repository.",
+                  })
                 )}
               </div>
             )}
@@ -544,7 +643,15 @@ export function RepoInspectorTab({
             {/* LANGUAGES SUBTAB */}
             {subTab === "languages" && (
               <div className="languages-view">
-                {languages && languages.languages?.length > 0 ? (
+                {sectionErrors.languages ? (
+                  renderSectionState({
+                    icon: Code2,
+                    title: "Language data unavailable",
+                    message: sectionErrors.languages,
+                    actionLabel: "Retry",
+                    onAction: () => loadRepoData(currentRepo),
+                  })
+                ) : languages && languages.languages?.length > 0 ? (
                   <div className="languages-detail-card">
                     {/* Visual Segmented Progress Bar */}
                     <div className="lang-bar-lg">
@@ -587,10 +694,11 @@ export function RepoInspectorTab({
                     </div>
                   </div>
                 ) : (
-                  <div className="empty-subtab-card">
-                    <Code2 size={32} />
-                    <p>No language breakdown data for this repository.</p>
-                  </div>
+                  renderSectionState({
+                    icon: Code2,
+                    title: "No language breakdown available",
+                    message: "This repository does not currently expose language data.",
+                  })
                 )}
               </div>
             )}
@@ -598,7 +706,15 @@ export function RepoInspectorTab({
             {/* CONTRIBUTORS SUBTAB */}
             {subTab === "contributors" && (
               <div className="contributors-view">
-                {contributors.length > 0 ? (
+                {sectionErrors.contributors ? (
+                  renderSectionState({
+                    icon: Users,
+                    title: "Contributors unavailable",
+                    message: sectionErrors.contributors,
+                    actionLabel: "Retry",
+                    onAction: () => loadRepoData(currentRepo),
+                  })
+                ) : contributors.length > 0 ? (
                   <div className="contributors-grid">
                     {contributors.map((c, index) => (
                       <a
@@ -625,10 +741,11 @@ export function RepoInspectorTab({
                     ))}
                   </div>
                 ) : (
-                  <div className="empty-subtab-card">
-                    <Users size={32} />
-                    <p>No contributors data available.</p>
-                  </div>
+                  renderSectionState({
+                    icon: Users,
+                    title: "No contributors available",
+                    message: "No contributor data is available for this repository right now.",
+                  })
                 )}
               </div>
             )}
@@ -636,7 +753,15 @@ export function RepoInspectorTab({
             {/* BRANCHES SUBTAB */}
             {subTab === "branches" && (
               <div className="branches-view">
-                {branches.length > 0 ? (
+                {sectionErrors.branches ? (
+                  renderSectionState({
+                    icon: GitBranch,
+                    title: "Branches unavailable",
+                    message: sectionErrors.branches,
+                    actionLabel: "Retry",
+                    onAction: () => loadRepoData(currentRepo),
+                  })
+                ) : branches.length > 0 ? (
                   <div className="branches-list">
                     {branches.map((b) => (
                       <div key={b.name} className="branch-item">
@@ -660,10 +785,11 @@ export function RepoInspectorTab({
                     ))}
                   </div>
                 ) : (
-                  <div className="empty-subtab-card">
-                    <GitBranch size={32} />
-                    <p>No branches recorded for this repository.</p>
-                  </div>
+                  renderSectionState({
+                    icon: GitBranch,
+                    title: "No branches available",
+                    message: "No branch metadata is available for this repository.",
+                  })
                 )}
               </div>
             )}
